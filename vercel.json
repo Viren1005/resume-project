@@ -9,7 +9,7 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "api/index.py"
+      "dest": "https://resume-project-9w3t-d1ka2mk5h-viru-s-projects.vercel.app/"
     }
   ]
 }

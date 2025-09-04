@@ -1,3 +1,5 @@
+# FILE: api/index.py
+
 from fastapi import FastAPI, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
@@ -14,15 +16,16 @@ app = FastAPI(title="AI Resume Analyzer")
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # allow all origins
+    allow_origins=["*"],  # allow all origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Upload directory
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+# --- THIS IS THE FIX ---
+# Use the Vercel-writable temporary directory instead of a local 'uploads' folder.
+UPLOAD_DIR = "/tmp" 
+# --- END OF FIX ---
 
 # ✅ Root route for testing frontend connection
 @app.get("/")

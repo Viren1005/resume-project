@@ -40,7 +40,7 @@ async def root():
     return {"message": "Backend is running!"}
 
 
-@app.post("/api/analyze_resume")
+@app.post("/analyze_resume")
 async def analyze_resume(file: UploadFile, job_desc: str = Form(...)):
     # --- NEW ERROR CHECKING ---
     # If the AI function failed to load, return a detailed error immediately.

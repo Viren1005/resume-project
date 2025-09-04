@@ -62,7 +62,7 @@ export default function ResumeAnalyzer() {
     formData.append("job_desc", jobDesc);
 
     try {
-      const res = await api.post("/api/analyze_resume", formData, {
+      const res = await api.post("/analyze_resume", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setResult(res.data);

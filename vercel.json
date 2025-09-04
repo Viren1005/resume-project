@@ -1,15 +1,9 @@
 {
   "version": 2,
-  "builds": [
+  "rewrites": [
     {
-      "src": "api/index.py",
-      "use": "@vercel/python"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "https://resume-project-9w3t-d1ka2mk5h-viru-s-projects.vercel.app/"
+      "source": "/api/:path*",
+      "destination": "https://resume-project-bqrf.onrender.com/:path*"
     }
   ]
 }

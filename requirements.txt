@@ -1,8 +1,9 @@
+# FILE: api/requirements.txt
+
 fastapi
 uvicorn
 python-multipart
-pdfplumber
-openai
-google-generativeai
-requests
 pydantic
+google-generativeai
+PyMuPDF
+python-dotenv

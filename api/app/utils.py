@@ -1,16 +1,23 @@
+# FILE: api/app/utils.py
+
 import fitz  # PyMuPDF
 import os
-from google import genai
-from dotenv import load_dotenv
+import google.generativeai as genai
 import json
 import re
 
-# Load environment variables
-load_dotenv()
-API_KEY = os.getenv("GOOGLE_API_KEY")
-print("🔑 Loaded API Key:", API_KEY)
+# --- THIS IS THE CORRECT WAY TO CONFIGURE THE LIBRARY ---
+# It reads the key from the environment. Vercel provides this variable.
+# This code will crash if the key is not set in Vercel settings.
+try:
+    genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
+except KeyError:
+    # This provides a clear error if the API key is missing on the server
+    raise RuntimeError("GOOGLE_API_KEY environment variable not set.")
+# --- END OF FIX ---
 
-# ✅ Extract text from PDF
+
+# This function is correct, no changes needed.
 def extract_text_from_pdf(file_path: str) -> str:
     """Extracts text from a PDF file."""
     text = ""
@@ -19,35 +26,34 @@ def extract_text_from_pdf(file_path: str) -> str:
             text += page.get_text()
     return text.strip()
 
-# ✅ Analyze resume with AI (Gemini) and return structured JSON
 
-
+# ✅ This function is completely rewritten to work correctly.
 def analyze_resume_with_ai(resume_text: str, job_desc: str) -> dict:
+    # --- MODEL INITIALIZATION AND PROMPT ---
+    model = genai.GenerativeModel('gemini-1.5-flash-latest')
     prompt = f"""
-You are a career advisor. Compare this resume with the job description.
+    You are a career advisor. Compare this resume with the job description.
 
-Resume:
-{resume_text}
+    Resume:
+    {resume_text}
 
-Job Description:
-{job_desc}
+    Job Description:
+    {job_desc}
 
-Return the output STRICTLY in JSON format like this:
-{{
-  "match_percentage": 65,
-  "strengths": ["Skill 1", "Skill 2"],
-  "weaknesses": ["Weakness 1", "Weakness 2"]
-}}
-"""
+    Return the output STRICTLY in JSON format like this:
+    {{
+      "match_percentage": 65,
+      "strengths": ["Skill 1", "Skill 2"],
+      "weaknesses": ["Weakness 1", "Weakness 2"]
+    }}
+    """
+    # --- END OF MODEL INITIALIZATION ---
 
     try:
-        client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
-        response = client.models.generate_content(
-            model="gemini-2.0-flash-001",
-            contents=prompt
-        )
-
+        # --- CORRECT API CALL ---
+        response = model.generate_content(prompt)
         content = response.text
+        # --- END OF CORRECT API CALL ---
 
         # Extract JSON inside ```json ... ``` if present
         json_match = re.search(r"```json\s*(\{.*?\})\s*```", content, re.DOTALL)
@@ -56,7 +62,10 @@ Return the output STRICTLY in JSON format like this:
 
         # Parse JSON
         return json.loads(content)
+
     except json.JSONDecodeError:
-        return {"error": "Failed to parse AI response", "raw": content}
+        # This happens if the AI gives a malformed response
+        return {"error": "Failed to parse AI response as JSON.", "raw_response": content}
     except Exception as e:
-        return {"error": str(e)}
+        # This catches any other errors from the Gemini API call itself
+        return {"error": f"An error occurred with the AI model: {str(e)}"}

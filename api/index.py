@@ -6,8 +6,10 @@ import os
 import asyncio
 import traceback  # This module is key to catching the error report
 
-# Attempt to import your utility functions
-from app.utils import extract_text_from_pdf, analyze_resume_with_ai
+# --- THIS IS THE FINAL FIX ---
+# The import path is now absolute from the project root, which is how Render runs the code.
+from api.app.utils import extract_text_from_pdf, analyze_resume_with_ai
+# --- END OF FINAL FIX ---
 
 # Initialize the FastAPI application
 app = FastAPI(title="AI Resume Analyzer")
@@ -69,14 +71,8 @@ async def analyze_resume(file: UploadFile, job_desc: str = Form(...)):
                 os.remove(file_path)
 
     except Exception as e:
-        # --- THIS IS THE MOST IMPORTANT PART OF THE CODE ---
-        # If ANY unhandled error happens anywhere in the code above, this
-        # 'except' block will catch it. Instead of crashing and returning a
-        # generic '500' error, it will capture the full Python traceback.
+        # If ANY unhandled error happens, this will catch it and send a detailed report.
         error_traceback = traceback.format_exc()
-        
-        # It then sends a detailed JSON response back to your browser,
-        # containing the exact reason for the crash.
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
@@ -84,4 +80,3 @@ async def analyze_resume(file: UploadFile, job_desc: str = Form(...)):
                 "traceback": error_traceback
             }
         )
-

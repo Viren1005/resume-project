@@ -1,30 +1,18 @@
-# FILE: api/index.py
-
 from fastapi import FastAPI, UploadFile, Form, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.concurrency import run_in_threadpool
+from starlette.responses import JSONResponse
 import shutil
 import os
 import asyncio
-import traceback # <-- Import traceback to get detailed errors
+import traceback  # This module is key to catching the error report
 
-# --- THIS IS THE CRITICAL PART ---
-# We will try to import your AI utility function. If it fails (e.g., due to a
-# missing API key in the environment), we will catch the error.
-try:
-    from app.utils import extract_text_from_pdf, analyze_resume_with_ai
-    AI_FUNCTION_AVAILABLE = True
-except Exception as e:
-    # If the import fails, we store the error and disable the AI function.
-    AI_FUNCTION_AVAILABLE = False
-    IMPORT_ERROR_TRACEBACK = traceback.format_exc()
-# --- END OF CRITICAL PART ---
+# Attempt to import your utility functions
+from app.utils import extract_text_from_pdf, analyze_resume_with_ai
 
-
-# FastAPI app
+# Initialize the FastAPI application
 app = FastAPI(title="AI Resume Analyzer")
 
-# CORS middleware
+# Standard CORS configuration to allow your frontend to connect
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -33,55 +21,67 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Use the temporary directory that is writable on cloud platforms like Render
 UPLOAD_DIR = "/tmp"
 
 @app.get("/")
 async def root():
-    return {"message": "Backend is running!"}
+    """A simple route to confirm the server is running."""
+    return {"message": "Backend is running and accessible!"}
 
 
 @app.post("/analyze_resume")
 async def analyze_resume(file: UploadFile, job_desc: str = Form(...)):
-    # --- NEW ERROR CHECKING ---
-    # If the AI function failed to load, return a detailed error immediately.
-    if not AI_FUNCTION_AVAILABLE:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error": "AI function failed to load on the server.",
-                "reason": "This is likely due to a missing environment variable (e.g., API_KEY).",
-                "traceback": IMPORT_ERROR_TRACEBACK
-            }
-        )
-    # --- END OF NEW ERROR CHECKING ---
-
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
-
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
-
+    """
+    This is the main analysis endpoint with full error catching.
+    """
     try:
-        with open(file_path, "wb") as f:
-            shutil.copyfileobj(file.file, f)
-        
-        resume_text = await run_in_threadpool(extract_text_from_pdf, file_path)
-        
+        # --- Main Logic ---
+        if not file.filename.lower().endswith(".pdf"):
+            raise HTTPException(status_code=400, detail="Only PDF files are allowed.")
+
+        file_path = os.path.join(UPLOAD_DIR, file.filename)
+
         try:
-            result = await asyncio.wait_for(
-                run_in_threadpool(analyze_resume_with_ai, resume_text, job_desc),
-                timeout=30
-            )
-        except asyncio.TimeoutError:
-            raise HTTPException(status_code=408, detail="AI analysis timed out.")
+            # Save the uploaded PDF to the temporary directory
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+
+            # Run the synchronous file-processing functions in a separate thread
+            # to avoid blocking the server's main event loop.
+            resume_text = await asyncio.to_thread(extract_text_from_pdf, file_path)
+            result = await asyncio.to_thread(analyze_resume_with_ai, resume_text, job_desc)
+
+            # Check if your `utils.py` file caught an error and returned it
+            if isinstance(result, dict) and "error" in result:
+                 return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={"detail": "The AI model or utility function returned an error.", "ai_error": result}
+                )
+
+            # If everything is successful, return the final analysis
+            return result
+
+        finally:
+            # This 'finally' block ensures the temporary file is always deleted,
+            # even if an error occurs.
+            if os.path.exists(file_path):
+                os.remove(file_path)
 
     except Exception as e:
-        # Catch any other unexpected errors during processing
-        raise HTTPException(
-            status_code=500,
-            detail={"error": "An unexpected error occurred during analysis.", "details": str(e)}
+        # --- THIS IS THE MOST IMPORTANT PART OF THE CODE ---
+        # If ANY unhandled error happens anywhere in the code above, this
+        # 'except' block will catch it. Instead of crashing and returning a
+        # generic '500' error, it will capture the full Python traceback.
+        error_traceback = traceback.format_exc()
+        
+        # It then sends a detailed JSON response back to your browser,
+        # containing the exact reason for the crash.
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "error_message": f"A critical unhandled server error occurred: {str(e)}",
+                "traceback": error_traceback
+            }
         )
-    finally:
-        if os.path.exists(file_path):
-            os.remove(file_path)
 
-    return result
